@@ -475,6 +475,31 @@ fn get_num_cpus() -> usize {
     unsafe { hermit_abi::get_processor_count() }
 }
 
+#[cfg(target_os = "vxworks")]
+fn get_num_cpus() -> usize {
+    type Tid = libc::c_ulong;
+    type Status = libc::c_int;
+    type Cpuset = libc::c_uint;
+    extern "C" {
+        fn taskCpuAffinityGet(tid: Tid, mask: *mut Cpuset) -> Status;
+    }
+    let mut mask = 0;
+    let status = unsafe { taskCpuAffinityGet(0, &mut mask) };
+    if status != 0 || mask == 0 {
+        return get_num_physical_cpus()
+    }
+    return mask.count_ones() as usize
+}
+
+#[cfg(target_os = "vxworks")]
+fn get_num_physical_cpus() -> usize {
+    extern "C" {
+        fn vxCpuConfiguredGet() -> libc::c_uint;
+    }
+    return unsafe { vxCpuConfiguredGet() as usize }
+}
+
+
 #[cfg(not(any(
     target_os = "nacl",
     target_os = "macos",
@@ -490,6 +515,7 @@ fn get_num_cpus() -> usize {
     target_os = "netbsd",
     target_os = "haiku",
     target_os = "hermit",
+    target_os = "vxworks",
     windows,
 )))]
 fn get_num_cpus() -> usize {
